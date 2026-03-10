@@ -7,6 +7,8 @@ import { diffCommand } from './cli/commands/diff';
 import { undoCommand } from './cli/commands/undo';
 import { statusCommand } from './cli/commands/status';
 import { taskCommand } from './cli/commands/task';
+import { exportCommand } from './cli/commands/export';
+import { uiCommand } from './cli/commands/ui';
 
 const program = new Command();
 
@@ -47,6 +49,19 @@ program
   .command('task <action> [name]')
   .description('Manage tasks. Actions: start, list, current')
   .action((action, name) => taskCommand(action, name));
+
+program
+  .command('export')
+  .description('Export tasks as clean git commits')
+  .option('-a, --all', 'export all tasks')
+  .option('-t, --task <id>', 'export a specific task by ID')
+  .action((options) => exportCommand({ all: options.all, taskId: options.task }));
+
+program
+  .command('ui')
+  .description('Open the timeline web UI')
+  .option('-p, --port <number>', 'port number', '3333')
+  .action((options) => uiCommand({ port: options.port }));
 
 program
   .command('setup')

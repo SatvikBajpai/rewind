@@ -72,6 +72,9 @@ Every checkpoint stores:
 | `rewind task list` | List all tasks |
 | `rewind task current` | Show active task |
 | `rewind status` | Show current state |
+| `rewind export` | Export current task as a clean git commit |
+| `rewind export --all` | Export all tasks as git commits |
+| `rewind ui` | Open timeline web UI (default port 3333) |
 | `rewind setup` | Print Claude Code hook configuration |
 
 ## Storage
