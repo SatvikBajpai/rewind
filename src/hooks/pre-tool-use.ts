@@ -40,15 +40,19 @@ function extractFilePaths(toolName: string, toolInput: Record<string, any>): str
       const patterns = [
         /sed\s+-i[^\s]*\s+(?:'[^']*'|"[^"]*"|[^\s]+)\s+([^\s;|&]+)/g,
         /(?:mv|cp|rm)\s+(?:-\w+\s+)*([^\s;|&]+)/g,
-        />\s*([^\s;|&]+)/g,
-        />>\s*([^\s;|&]+)/g,
+        /[^<]>\s*([^\s;|&<]+)/g,   // redirect (not heredoc <<)
+        />>\s*([^\s;|&<]+)/g,       // append
       ];
+
+      const invalidNames = new Set(['EOF', 'END', 'HEREDOC', 'EOL', 'EOM', 'null', 'dev', '2']);
 
       for (const pattern of patterns) {
         let match;
         while ((match = pattern.exec(cmd)) !== null) {
           const p = match[1];
-          if (p && !p.startsWith('-') && !p.includes('$')) {
+          if (p && !p.startsWith('-') && !p.includes('$') && !p.includes('(') &&
+              !invalidNames.has(p) && !p.startsWith('/dev/') &&
+              (p.includes('/') || p.includes('.'))) {
             const resolved = path.isAbsolute(p) ? p : path.resolve(p);
             paths.push(resolved);
           }
@@ -120,6 +124,29 @@ async function main() {
     }
 
     initializeDb(rewindDir);
+
+    // Skip read-only Bash commands that won't modify files
+    if (event.tool_name === 'Bash') {
+      const cmd = (event.tool_input.command || '').trim();
+      const readOnlyPrefixes = [
+        'cat ', 'ls ', 'echo ', 'pwd', 'which ', 'head ', 'tail ', 'wc ',
+        'grep ', 'rg ', 'find ', 'file ', 'stat ', 'du ', 'df ',
+        'git status', 'git log', 'git diff', 'git show', 'git branch',
+        'git remote', 'git stash list', 'git rev-parse',
+        'node -e', 'node -p', 'python3 -c "import sys',
+        'sqlite3 ', 'curl ', 'wget -O -', 'env ', 'printenv',
+        'npm list', 'npm ls', 'npm view', 'npm info',
+        'rewind ', 'docker ps', 'docker logs', 'docker inspect',
+        'ps ', 'top ', 'htop', 'whoami', 'date', 'uname',
+        'lsof ', 'netstat', 'ifconfig', 'hostname',
+      ];
+
+      const isReadOnly = readOnlyPrefixes.some(prefix => cmd.startsWith(prefix));
+      if (isReadOnly) {
+        process.stdout.write('{}');
+        return;
+      }
+    }
 
     const filePaths = extractFilePaths(event.tool_name, event.tool_input);
 
