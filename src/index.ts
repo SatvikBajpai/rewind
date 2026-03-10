@@ -11,6 +11,7 @@ import { exportCommand } from './cli/commands/export';
 import { uiCommand } from './cli/commands/ui';
 import { checkpointCommand } from './cli/commands/checkpoint';
 import { watchCommand } from './cli/commands/watch';
+import { cleanCommand } from './cli/commands/clean';
 
 const program = new Command();
 
@@ -80,6 +81,11 @@ program
   .action((options) => watchCommand(options));
 
 program
+  .command('clean')
+  .description('Clean up orphaned checkpoints, empty entries, and stale temp files')
+  .action(() => cleanCommand());
+
+program
   .command('setup')
   .description('Print Claude Code hook configuration')
   .action(() => {
@@ -101,7 +107,7 @@ program
             hooks: [{
               type: "command",
               command: "node " + __dirname + "/hooks/post-tool-use.js",
-              timeout: 5
+              timeout: 10
             }]
           }
         ],
