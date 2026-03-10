@@ -22,32 +22,17 @@ function getApiData(rewindDir: string) {
     return { ...cp, files };
   });
 
-  // Per-task checkpoint counts
   const taskCounts: Record<string, number> = {};
-  for (const cp of checkpoints) {
-    taskCounts[cp.task_id] = (taskCounts[cp.task_id] || 0) + 1;
-  }
+  for (const cp of checkpoints) { taskCounts[cp.task_id] = (taskCounts[cp.task_id] || 0) + 1; }
 
-  // Per-session checkpoint counts
   const sessionCounts: Record<string, number> = {};
-  for (const cp of checkpoints) {
-    sessionCounts[cp.session_id] = (sessionCounts[cp.session_id] || 0) + 1;
-  }
+  for (const cp of checkpoints) { sessionCounts[cp.session_id] = (sessionCounts[cp.session_id] || 0) + 1; }
 
-  // Tool breakdown
   const toolCounts: Record<string, number> = {};
-  for (const cp of checkpoints) {
-    const tool = cp.tool_name || 'unknown';
-    toolCounts[tool] = (toolCounts[tool] || 0) + 1;
-  }
+  for (const cp of checkpoints) { const t = cp.tool_name || 'unknown'; toolCounts[t] = (toolCounts[t] || 0) + 1; }
 
-  // Unique files touched
   const uniqueFiles = new Set<string>();
-  for (const cp of checkpointsWithFiles) {
-    for (const f of cp.files) {
-      uniqueFiles.add(f.file_path);
-    }
-  }
+  for (const cp of checkpointsWithFiles) { for (const f of cp.files) { uniqueFiles.add(f.file_path); } }
 
   const stats = {
     totalCheckpoints: (db.prepare('SELECT COUNT(*) as c FROM checkpoints').get() as any).c,
@@ -68,582 +53,637 @@ function getApiData(rewindDir: string) {
 
 function getHTML(): string {
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-color-mode="dark" data-dark-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>rewind</title>
 <style>
+  :root {
+    --color-canvas-default: #0d1117;
+    --color-canvas-subtle: #161b22;
+    --color-canvas-inset: #010409;
+    --color-border-default: #30363d;
+    --color-border-muted: #21262d;
+    --color-fg-default: #e6edf3;
+    --color-fg-muted: #8b949e;
+    --color-fg-subtle: #6e7681;
+    --color-accent-fg: #58a6ff;
+    --color-success-fg: #3fb950;
+    --color-danger-fg: #f85149;
+    --color-attention-fg: #d29922;
+    --color-done-fg: #a371f7;
+    --color-neutral-muted: rgba(110,118,129,0.4);
+    --color-accent-subtle: rgba(56,139,253,0.15);
+    --color-success-subtle: rgba(46,160,67,0.15);
+    --color-danger-subtle: rgba(248,81,73,0.1);
+    --color-attention-subtle: rgba(187,128,9,0.15);
+    --color-done-subtle: rgba(163,113,247,0.15);
+    --border-radius: 6px;
+    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #09090b;
-    color: #e4e4e7;
-    height: 100vh;
-    overflow: hidden;
+    font-family: var(--font-sans);
+    background: var(--color-canvas-default);
+    color: var(--color-fg-default);
+    font-size: 14px;
+    line-height: 1.5;
   }
 
-  /* Layout: sidebar + main */
-  .layout {
-    display: grid;
-    grid-template-columns: 300px 1fr;
-    height: 100vh;
-  }
-
-  /* ── Sidebar ── */
-  .sidebar {
-    background: #0f0f12;
-    border-right: 1px solid #1c1c22;
+  /* ── Top Nav ── */
+  .top-nav {
+    background: var(--color-canvas-subtle);
+    border-bottom: 1px solid var(--color-border-default);
+    padding: 0 24px;
+    height: 48px;
     display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
   }
 
-  .sidebar-header {
-    padding: 20px 20px 16px;
-    border-bottom: 1px solid #1c1c22;
-  }
-
-  .logo {
-    font-size: 20px;
+  .nav-logo {
     font-weight: 700;
-    color: #fff;
+    font-size: 16px;
+    color: var(--color-fg-default);
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 12px;
+    text-decoration: none;
   }
 
-  .logo-icon {
-    width: 28px;
-    height: 28px;
-    background: #22c55e;
-    border-radius: 8px;
+  .nav-logo svg { fill: var(--color-fg-default); }
+
+  .nav-sep { color: var(--color-fg-subtle); font-size: 18px; font-weight: 300; }
+
+  .nav-project {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--color-accent-fg);
+  }
+
+  .nav-right {
+    margin-left: auto;
     display: flex;
     align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    color: #000;
-    font-weight: 800;
+    gap: 12px;
   }
 
-  .project-info {
-    background: #16161a;
-    border: 1px solid #1c1c22;
-    border-radius: 10px;
-    padding: 14px 16px;
+  .nav-live {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--color-success-fg);
+    background: var(--color-success-subtle);
+    padding: 3px 10px;
+    border-radius: 20px;
   }
 
-  .project-name {
-    font-size: 15px;
-    font-weight: 600;
-    color: #fff;
+  .live-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--color-success-fg);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── Page Container ── */
+  .page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* ── Stats Row ── */
+  .stats-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .stat-box {
+    flex: 1;
+    background: var(--color-canvas-subtle);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--border-radius);
+    padding: 16px 20px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--color-fg-muted);
     margin-bottom: 4px;
   }
 
-  .project-path {
-    font-size: 11px;
-    color: #52525b;
-    font-family: 'SF Mono', monospace;
-    word-break: break-all;
+  .stat-value {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--color-fg-default);
   }
 
-  /* Sidebar sections */
-  .sidebar-section {
-    padding: 16px 20px;
-    border-bottom: 1px solid #1c1c22;
+  /* ── Tabs / Filters ── */
+  .tab-nav {
+    display: flex;
+    border-bottom: 1px solid var(--color-border-default);
+    margin-bottom: 16px;
+    gap: 0;
   }
 
-  .sidebar-section-title {
-    font-size: 10px;
-    font-weight: 700;
-    color: #52525b;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin-bottom: 12px;
-  }
-
-  /* Session cards */
-  .session-card {
-    padding: 10px 12px;
-    border-radius: 8px;
-    margin-bottom: 6px;
+  .tab-btn {
+    padding: 8px 16px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--color-fg-muted);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
     cursor: pointer;
-    transition: background 0.15s;
-    border: 1px solid transparent;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.15s;
   }
 
-  .session-card:hover { background: #1c1c22; }
-  .session-card.active { background: #1a1a2e; border-color: #3b3bf7; }
+  .tab-btn:hover { color: var(--color-fg-default); }
 
-  .session-status {
-    display: inline-block;
-    width: 7px;
-    height: 7px;
+  .tab-btn.active {
+    color: var(--color-fg-default);
+    font-weight: 600;
+    border-bottom-color: #f78166;
+  }
+
+  .tab-count {
+    font-size: 12px;
+    background: var(--color-neutral-muted);
+    padding: 0 8px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+
+  /* ── Layout: sidebar + content ── */
+  .content-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+  }
+
+  /* ── Sidebar (right side, like GitHub) ── */
+  .right-sidebar section {
+    margin-bottom: 20px;
+  }
+
+  .sidebar-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-border-muted);
+    margin-bottom: 10px;
+  }
+
+  /* Session items */
+  .session-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background 0.1s;
+    margin-bottom: 2px;
+  }
+
+  .session-item:hover { background: var(--color-canvas-subtle); }
+  .session-item.selected { background: var(--color-accent-subtle); }
+
+  .session-dot {
+    width: 8px; height: 8px;
     border-radius: 50%;
-    margin-right: 6px;
+    margin-top: 6px;
+    flex-shrink: 0;
   }
 
-  .session-status.live { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
-  .session-status.ended { background: #3f3f46; }
+  .session-dot.live { background: var(--color-success-fg); }
+  .session-dot.ended { background: var(--color-fg-subtle); }
 
-  .session-time { font-size: 13px; color: #a1a1aa; }
-  .session-meta { font-size: 11px; color: #52525b; margin-top: 2px; }
+  .session-label { font-size: 13px; color: var(--color-fg-default); }
+  .session-detail { font-size: 12px; color: var(--color-fg-subtle); }
 
-  /* Task list in sidebar */
+  /* Task items */
   .task-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 12px;
-    border-radius: 8px;
-    margin-bottom: 4px;
+    padding: 6px 10px;
+    border-radius: var(--border-radius);
     cursor: pointer;
-    transition: background 0.15s;
-  }
-
-  .task-item:hover { background: #1c1c22; }
-  .task-item.active-filter { background: #1a1a2e; }
-
-  .task-name { font-size: 13px; color: #d4d4d8; }
-
-  .task-status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 6px;
-  }
-
-  .task-status-dot.active { background: #22c55e; }
-  .task-status-dot.completed { background: #3f3f46; }
-
-  .task-count {
-    font-size: 11px;
-    color: #52525b;
-    background: #1c1c22;
-    padding: 2px 8px;
-    border-radius: 10px;
-  }
-
-  /* Sidebar stats */
-  .sidebar-stats {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  .sidebar-stat {
-    background: #16161a;
-    border-radius: 8px;
-    padding: 12px;
-    text-align: center;
-  }
-
-  .sidebar-stat-val {
-    font-size: 22px;
-    font-weight: 700;
-    color: #fff;
-  }
-
-  .sidebar-stat-label {
-    font-size: 10px;
-    color: #52525b;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-top: 2px;
-  }
-
-  /* Tool breakdown */
-  .tool-bar {
-    display: flex;
-    height: 6px;
-    border-radius: 3px;
-    overflow: hidden;
-    margin-top: 12px;
-    margin-bottom: 8px;
-  }
-
-  .tool-bar-seg { height: 100%; transition: width 0.3s; }
-
-  .tool-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .tool-legend-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    color: #71717a;
-  }
-
-  .tool-legend-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-  }
-
-  .sidebar-scroll {
-    flex: 1;
-    overflow-y: auto;
-  }
-
-  .sidebar-scroll::-webkit-scrollbar { width: 4px; }
-  .sidebar-scroll::-webkit-scrollbar-thumb { background: #27272a; border-radius: 2px; }
-
-  /* ── Main Area ── */
-  .main {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .main-header {
-    padding: 16px 28px;
-    border-bottom: 1px solid #1c1c22;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #0c0c0f;
-  }
-
-  .main-title {
-    font-size: 16px;
-    font-weight: 600;
-    color: #fff;
-  }
-
-  .main-subtitle {
-    font-size: 12px;
-    color: #52525b;
-    margin-top: 2px;
-  }
-
-  .filter-bar {
-    display: flex;
-    gap: 8px;
-  }
-
-  .filter-btn {
-    padding: 6px 14px;
-    border-radius: 6px;
-    border: 1px solid #27272a;
-    background: transparent;
-    color: #a1a1aa;
-    font-size: 12px;
-    font-family: inherit;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .filter-btn:hover { border-color: #3f3f46; color: #fff; }
-  .filter-btn.active { background: #22c55e; color: #000; border-color: #22c55e; font-weight: 600; }
-
-  /* Timeline */
-  .main-scroll {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px 28px;
-  }
-
-  .main-scroll::-webkit-scrollbar { width: 6px; }
-  .main-scroll::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
-
-  /* Task group */
-  .task-group {
-    margin-bottom: 28px;
-  }
-
-  .task-group-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #1c1c22;
-  }
-
-  .task-group-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: #1a1a2e;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    color: #818cf8;
-  }
-
-  .task-group-title { font-size: 14px; font-weight: 600; color: #c7d2fe; }
-
-  .task-group-meta {
-    font-size: 11px;
-    color: #52525b;
-    margin-left: auto;
-  }
-
-  .task-group-status {
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 10px;
-  }
-
-  .task-group-status.active { background: #052e16; color: #22c55e; }
-  .task-group-status.completed { background: #1c1c22; color: #71717a; }
-
-  /* Checkpoint row */
-  .cp-row {
-    display: grid;
-    grid-template-columns: 40px 1fr;
-    gap: 0;
+    transition: background 0.1s;
     margin-bottom: 2px;
   }
 
-  .cp-line {
+  .task-item:hover { background: var(--color-canvas-subtle); }
+  .task-item.selected { background: var(--color-accent-subtle); }
+
+  .task-label {
+    font-size: 13px;
+    color: var(--color-fg-default);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-indicator {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+
+  .status-indicator.active { background: var(--color-success-fg); }
+  .status-indicator.completed { background: var(--color-fg-subtle); }
+
+  .counter-badge {
+    font-size: 12px;
+    color: var(--color-fg-muted);
+    background: var(--color-neutral-muted);
+    padding: 0 8px;
+    border-radius: 10px;
+  }
+
+  /* Tool breakdown */
+  .tool-breakdown {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    gap: 8px;
   }
 
-  .cp-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    margin-top: 16px;
-    flex-shrink: 0;
-    z-index: 1;
-  }
-
-  .cp-dot.Write { background: #22c55e; }
-  .cp-dot.Edit { background: #f59e0b; }
-  .cp-dot.Bash { background: #ef4444; }
-  .cp-dot.MultiEdit { background: #a855f7; }
-
-  .cp-connector {
-    width: 2px;
-    flex: 1;
-    background: #1c1c22;
-  }
-
-  .cp-card {
-    background: #111114;
-    border: 1px solid #1c1c22;
-    border-radius: 10px;
-    padding: 14px 18px;
-    margin-bottom: 8px;
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-  }
-
-  .cp-card:hover {
-    border-color: #27272a;
-    background: #16161a;
-  }
-
-  .cp-card-header {
+  .tool-row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 6px;
-  }
-
-  .cp-tool-badge {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 6px;
-  }
-
-  .cp-tool-badge.Write { background: #052e16; color: #4ade80; }
-  .cp-tool-badge.Edit { background: #2d1600; color: #fbbf24; }
-  .cp-tool-badge.Bash { background: #2d0000; color: #f87171; }
-  .cp-tool-badge.MultiEdit { background: #1a0033; color: #c084fc; }
-
-  .cp-id-badge {
-    font-family: 'SF Mono', monospace;
-    font-size: 11px;
-    color: #52525b;
-  }
-
-  .cp-time-badge {
-    font-size: 11px;
-    color: #3f3f46;
-    margin-left: auto;
-  }
-
-  .cp-files-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 6px;
-  }
-
-  .cp-file-tag {
-    font-family: 'SF Mono', monospace;
-    font-size: 11px;
-    background: #1c1c22;
-    color: #a1a1aa;
-    padding: 2px 8px;
-    border-radius: 4px;
-  }
-
-  .cp-reasoning-box {
-    margin-top: 10px;
-    padding: 10px 14px;
-    background: #0c1520;
-    border-left: 3px solid #3b82f6;
-    border-radius: 0 6px 6px 0;
+    gap: 8px;
     font-size: 12px;
-    color: #94a3b8;
-    line-height: 1.5;
   }
 
-  .cp-reasoning-label {
-    font-size: 10px;
+  .tool-color {
+    width: 10px; height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .tool-name { color: var(--color-fg-muted); flex: 1; }
+
+  .tool-pct {
+    color: var(--color-fg-subtle);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+
+  .tool-bar-full {
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    background: var(--color-neutral-muted);
+    margin-bottom: 10px;
+  }
+
+  .tool-bar-seg { height: 100%; }
+
+  /* ── Timeline (main column) ── */
+  .timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .timeline-title {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .timeline-subtitle {
+    font-size: 12px;
+    color: var(--color-fg-subtle);
+  }
+
+  /* Commit-style list (like GitHub commits page) */
+  .commit-group {
+    margin-bottom: 24px;
+  }
+
+  .commit-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--color-canvas-subtle);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-fg-muted);
+  }
+
+  .commit-group-header svg { fill: var(--color-fg-subtle); }
+
+  .commit-group-status {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 1px 8px;
+    border-radius: 10px;
+    margin-left: 4px;
+  }
+
+  .commit-group-status.active {
+    background: var(--color-success-subtle);
+    color: var(--color-success-fg);
+  }
+
+  .commit-group-status.completed {
+    background: var(--color-neutral-muted);
+    color: var(--color-fg-subtle);
+  }
+
+  .commit-group-count {
+    margin-left: auto;
+    font-weight: 400;
+    color: var(--color-fg-subtle);
+  }
+
+  .commit-list {
+    border: 1px solid var(--color-border-default);
+    border-top: none;
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+    overflow: hidden;
+  }
+
+  .commit-row {
+    display: flex;
+    align-items: flex-start;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--color-border-muted);
+    cursor: pointer;
+    transition: background 0.1s;
+    gap: 12px;
+  }
+
+  .commit-row:last-child { border-bottom: none; }
+  .commit-row:hover { background: var(--color-canvas-subtle); }
+
+  .commit-icon {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 12px;
     font-weight: 700;
-    color: #3b82f6;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+
+  .commit-icon.Write { background: var(--color-success-subtle); color: var(--color-success-fg); }
+  .commit-icon.Edit { background: var(--color-attention-subtle); color: var(--color-attention-fg); }
+  .commit-icon.Bash { background: var(--color-danger-subtle); color: var(--color-danger-fg); }
+  .commit-icon.MultiEdit { background: var(--color-done-subtle); color: var(--color-done-fg); }
+  .commit-icon.manual { background: var(--color-accent-subtle); color: var(--color-accent-fg); }
+
+  .commit-body { flex: 1; min-width: 0; }
+
+  .commit-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-bottom: 4px;
   }
 
-  /* Diff panel */
+  .commit-msg {
+    font-size: 14px;
+    color: var(--color-fg-default);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .commit-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .file-badge {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-fg-muted);
+    background: var(--color-neutral-muted);
+    padding: 1px 8px;
+    border-radius: 4px;
+  }
+
+  .commit-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--color-fg-subtle);
+  }
+
+  .commit-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .commit-sha {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-accent-fg);
+    background: var(--color-accent-subtle);
+    padding: 2px 8px;
+    border-radius: var(--border-radius);
+  }
+
+  .commit-time {
+    font-size: 12px;
+    color: var(--color-fg-subtle);
+  }
+
+  /* Reasoning inline */
+  .commit-reasoning {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--color-canvas-inset);
+    border: 1px solid var(--color-border-muted);
+    border-left: 3px solid var(--color-accent-fg);
+    border-radius: var(--border-radius);
+    font-size: 12px;
+    color: var(--color-fg-muted);
+    line-height: 1.5;
+  }
+
+  .reasoning-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-accent-fg);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  /* Diff view (GitHub-style) */
   .diff-panel {
     display: none;
     margin-top: 10px;
-    background: #0d1117;
-    border: 1px solid #1c1c22;
-    border-radius: 8px;
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--border-radius);
     overflow: hidden;
   }
 
   .diff-panel.open { display: block; }
 
   .diff-file-header {
-    padding: 8px 14px;
-    background: #161b22;
-    border-bottom: 1px solid #1c1c22;
-    font-family: 'SF Mono', monospace;
+    padding: 8px 16px;
+    background: var(--color-canvas-subtle);
+    border-bottom: 1px solid var(--color-border-default);
+    font-family: var(--font-mono);
     font-size: 12px;
-    color: #8b949e;
+    color: var(--color-fg-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
-  .diff-content {
-    padding: 12px 14px;
-    font-family: 'SF Mono', monospace;
+  .diff-file-header svg { fill: var(--color-fg-subtle); }
+
+  .diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
     font-size: 12px;
-    line-height: 1.7;
-    overflow-x: auto;
+    line-height: 20px;
+  }
+
+  .diff-table td {
+    padding: 0 16px;
     white-space: pre;
+    vertical-align: top;
   }
 
-  .diff-add { color: #3fb950; background: #0d2818; display: block; margin: 0 -14px; padding: 0 14px; }
-  .diff-del { color: #f85149; background: #2d0000; display: block; margin: 0 -14px; padding: 0 14px; }
-  .diff-hunk { color: #58a6ff; }
-  .diff-meta { color: #484f58; }
+  .diff-line-add { background: rgba(46,160,67,0.15); color: var(--color-success-fg); }
+  .diff-line-del { background: rgba(248,81,73,0.1); color: var(--color-danger-fg); }
+  .diff-line-hunk { color: var(--color-accent-fg); background: var(--color-accent-subtle); }
+  .diff-line-meta { color: var(--color-fg-subtle); }
 
-  /* Empty state */
+  /* Empty */
   .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 80px 40px;
-    color: #3f3f46;
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--color-fg-subtle);
   }
 
-  .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
-  .empty-state-text { font-size: 15px; }
+  .empty-state-title { font-size: 20px; font-weight: 600; color: var(--color-fg-muted); margin-bottom: 4px; }
 
-  /* Live indicator */
-  .live-dot {
-    width: 8px;
-    height: 8px;
-    background: #22c55e;
-    border-radius: 50%;
-    display: inline-block;
-    animation: pulse 2s infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  .header-live {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: #22c55e;
+  /* Responsive */
+  @media (max-width: 900px) {
+    .content-layout { grid-template-columns: 1fr; }
+    .right-sidebar { order: -1; }
+    .stats-row { flex-wrap: wrap; }
+    .stat-box { min-width: 120px; }
   }
 </style>
 </head>
 <body>
-<div class="layout">
 
-  <!-- Sidebar -->
-  <div class="sidebar">
-    <div class="sidebar-header">
-      <div class="logo">
-        <div class="logo-icon">R</div>
-        rewind
-      </div>
-      <div class="project-info" id="project-info"></div>
-    </div>
+<!-- Top Nav -->
+<nav class="top-nav">
+  <a class="nav-logo" href="/">
+    <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+    rewind
+  </a>
+  <span class="nav-sep">/</span>
+  <span class="nav-project" id="nav-project">project</span>
 
-    <div class="sidebar-scroll">
-      <div class="sidebar-section">
-        <div class="sidebar-section-title">Overview</div>
-        <div class="sidebar-stats" id="sidebar-stats"></div>
-        <div id="tool-breakdown"></div>
-      </div>
+  <div class="nav-right">
+    <div class="nav-live" id="nav-live"><span class="live-dot"></span> Watching</div>
+  </div>
+</nav>
 
-      <div class="sidebar-section">
-        <div class="sidebar-section-title">Sessions</div>
+<div class="page">
+
+  <!-- Stats -->
+  <div class="stats-row" id="stats-row"></div>
+
+  <!-- Tabs -->
+  <div class="tab-nav" id="tab-nav">
+    <button class="tab-btn active" data-filter="all" onclick="setFilter('all')">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354Z"/></svg>
+      All <span class="tab-count" id="count-all">0</span>
+    </button>
+    <button class="tab-btn" data-filter="Write" onclick="setFilter('Write')">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Z"/></svg>
+      Write <span class="tab-count" id="count-Write">0</span>
+    </button>
+    <button class="tab-btn" data-filter="Edit" onclick="setFilter('Edit')">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Z"/></svg>
+      Edit <span class="tab-count" id="count-Edit">0</span>
+    </button>
+    <button class="tab-btn" data-filter="Bash" onclick="setFilter('Bash')">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25Zm1.75-.25a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V2.75a.25.25 0 0 0-.25-.25ZM7.25 8a.749.749 0 0 1-.22.53l-2.25 2.25a.749.749 0 1 1-1.06-1.06L5.44 8 3.72 6.28a.749.749 0 1 1 1.06-1.06l2.25 2.25c.141.14.22.331.22.53Zm1.5 1.5h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1 0-1.5Z"/></svg>
+      Bash <span class="tab-count" id="count-Bash">0</span>
+    </button>
+  </div>
+
+  <!-- Main layout -->
+  <div class="content-layout">
+
+    <!-- Timeline (main) -->
+    <div class="timeline-col" id="timeline-col"></div>
+
+    <!-- Right sidebar -->
+    <div class="right-sidebar">
+      <section>
+        <div class="sidebar-title">Sessions</div>
         <div id="sessions-list"></div>
-      </div>
+      </section>
 
-      <div class="sidebar-section">
-        <div class="sidebar-section-title">Tasks</div>
+      <section>
+        <div class="sidebar-title">Tasks</div>
         <div id="tasks-list"></div>
-      </div>
-    </div>
-  </div>
+      </section>
 
-  <!-- Main Content -->
-  <div class="main">
-    <div class="main-header">
-      <div>
-        <div class="main-title" id="main-title">All Checkpoints</div>
-        <div class="main-subtitle" id="main-subtitle">Showing all activity</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:16px;">
-        <div class="header-live"><span class="live-dot"></span> Live</div>
-        <div class="filter-bar">
-          <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
-          <button class="filter-btn" data-filter="Write" onclick="setFilter('Write')">Write</button>
-          <button class="filter-btn" data-filter="Edit" onclick="setFilter('Edit')">Edit</button>
-          <button class="filter-btn" data-filter="Bash" onclick="setFilter('Bash')">Bash</button>
-        </div>
-      </div>
+      <section>
+        <div class="sidebar-title">Tool Breakdown</div>
+        <div id="tool-breakdown"></div>
+      </section>
+
+      <section>
+        <div class="sidebar-title">Files Touched</div>
+        <div id="files-list"></div>
+      </section>
     </div>
 
-    <div class="main-scroll" id="main-scroll"></div>
   </div>
-
 </div>
 
 <script>
-let currentData = null;
-let currentFilter = 'all';
-let currentSessionFilter = null;
-let currentTaskFilter = null;
+var currentData = null;
+var currentFilter = 'all';
+var currentSessionFilter = null;
+var currentTaskFilter = null;
 
 function esc(s) {
   if (!s) return '';
@@ -652,43 +692,61 @@ function esc(s) {
 
 function relativeTime(iso) {
   if (!iso) return '';
-  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return s + 's ago';
-  const m = Math.floor(s / 60);
-  if (m < 60) return m + 'm ago';
-  const h = Math.floor(m / 60);
-  if (h < 24) return h + 'h ago';
-  return Math.floor(h / 24) + 'd ago';
+  var s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 5) return 'just now';
+  if (s < 60) return s + ' seconds ago';
+  var m = Math.floor(s / 60);
+  if (m < 60) return m + ' minute' + (m>1?'s':'') + ' ago';
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + ' hour' + (h>1?'s':'') + ' ago';
+  return Math.floor(h / 24) + ' day' + (Math.floor(h/24)>1?'s':'') + ' ago';
 }
 
-function shortTime(iso) {
+function shortDate(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 }
 
 function fileName(p) { return p ? p.split('/').pop() : ''; }
 
-function formatDiff(files) {
+function toolLabel(tool, files) {
+  if (!files || files.length === 0) return tool;
+  var f = fileName(files[0].file_path);
+  switch(tool) {
+    case 'Write': return files[0].file_existed ? 'Overwrote ' + f : 'Created ' + f;
+    case 'Edit': return 'Edited ' + f;
+    case 'Bash': return 'Ran command';
+    case 'MultiEdit': return 'Multi-edited ' + f;
+    default: return tool + ' ' + f;
+  }
+}
+
+function formatDiffHTML(files) {
   if (!files || files.length === 0) return '';
-  let html = '';
-  for (const f of files) {
-    html += '<div class="diff-file-header">' + esc(fileName(f.file_path)) + '</div>';
-    html += '<div class="diff-content">';
-    if (!f.diff_content) {
-      html += '<span class="diff-meta">no diff recorded</span>';
-    } else {
-      html += f.diff_content.split('\\n').map(function(line) {
-        var e = esc(line);
-        if (line.startsWith('+') && !line.startsWith('+++')) return '<span class="diff-add">' + e + '</span>';
-        if (line.startsWith('-') && !line.startsWith('---')) return '<span class="diff-del">' + e + '</span>';
-        if (line.startsWith('@@')) return '<span class="diff-hunk">' + e + '</span>';
-        if (line.startsWith('Index:') || line.startsWith('===') || line.startsWith('---') || line.startsWith('+++'))
-          return '<span class="diff-meta">' + e + '</span>';
-        return e;
-      }).join('\\n');
-    }
+  var html = '';
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i];
+    html += '<div class="diff-file-header">';
+    html += '<svg width="14" height="14" viewBox="0 0 16 16"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Z" fill="currentColor"/></svg>';
+    html += esc(f.file_path);
     html += '</div>';
+    html += '<table class="diff-table"><tbody>';
+    if (!f.diff_content) {
+      html += '<tr><td class="diff-line-meta">no diff recorded</td></tr>';
+    } else {
+      var lines = f.diff_content.split('\\n');
+      for (var j = 0; j < lines.length; j++) {
+        var line = lines[j];
+        var e = esc(line);
+        var cls = '';
+        if (line.startsWith('+') && !line.startsWith('+++')) cls = 'diff-line-add';
+        else if (line.startsWith('-') && !line.startsWith('---')) cls = 'diff-line-del';
+        else if (line.startsWith('@@')) cls = 'diff-line-hunk';
+        else if (line.startsWith('Index:') || line.startsWith('===') || line.startsWith('---') || line.startsWith('+++')) cls = 'diff-line-meta';
+        html += '<tr><td class="' + cls + '">' + e + '</td></tr>';
+      }
+    }
+    html += '</tbody></table>';
   }
   return html;
 }
@@ -699,69 +757,43 @@ function toggleDiff(id) {
 
 function setFilter(f) {
   currentFilter = f;
-  document.querySelectorAll('.filter-btn').forEach(function(b) {
+  document.querySelectorAll('.tab-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.filter === f);
   });
-  render();
+  renderTimeline();
 }
 
-function filterBySession(sessionId) {
-  currentSessionFilter = currentSessionFilter === sessionId ? null : sessionId;
+function selectSession(id) {
+  currentSessionFilter = currentSessionFilter === id ? null : id;
   currentTaskFilter = null;
   render();
 }
 
-function filterByTask(taskId) {
-  currentTaskFilter = currentTaskFilter === taskId ? null : taskId;
+function selectTask(id) {
+  currentTaskFilter = currentTaskFilter === id ? null : id;
   currentSessionFilter = null;
   render();
 }
 
-function renderProjectInfo(data) {
-  document.getElementById('project-info').innerHTML =
-    '<div class="project-name">' + esc(data.project.name) + '</div>' +
-    '<div class="project-path">' + esc(data.project.root) + '</div>';
-}
-
-function renderSidebarStats(data) {
+function renderStats(data) {
   var s = data.stats;
-  document.getElementById('sidebar-stats').innerHTML =
-    '<div class="sidebar-stat"><div class="sidebar-stat-val">' + s.totalCheckpoints + '</div><div class="sidebar-stat-label">Checkpoints</div></div>' +
-    '<div class="sidebar-stat"><div class="sidebar-stat-val">' + s.totalTasks + '</div><div class="sidebar-stat-label">Tasks</div></div>' +
-    '<div class="sidebar-stat"><div class="sidebar-stat-val">' + s.totalSessions + '</div><div class="sidebar-stat-label">Sessions</div></div>' +
-    '<div class="sidebar-stat"><div class="sidebar-stat-val">' + s.uniqueFiles + '</div><div class="sidebar-stat-label">Files</div></div>';
-
-  // Tool breakdown bar
-  var tc = s.toolCounts;
-  var total = Object.values(tc).reduce(function(a,b){return a+b}, 0);
-  if (total === 0) { document.getElementById('tool-breakdown').innerHTML = ''; return; }
-
-  var colors = { Write: '#22c55e', Edit: '#f59e0b', Bash: '#ef4444', MultiEdit: '#a855f7' };
-  var barHtml = '<div class="tool-bar">';
-  var legendHtml = '<div class="tool-legend">';
-  for (var tool in tc) {
-    var pct = (tc[tool] / total * 100).toFixed(1);
-    var col = colors[tool] || '#71717a';
-    barHtml += '<div class="tool-bar-seg" style="width:' + pct + '%;background:' + col + '"></div>';
-    legendHtml += '<div class="tool-legend-item"><div class="tool-legend-dot" style="background:' + col + '"></div>' + tool + ' ' + tc[tool] + '</div>';
-  }
-  barHtml += '</div>';
-  legendHtml += '</div>';
-  document.getElementById('tool-breakdown').innerHTML = barHtml + legendHtml;
+  document.getElementById('stats-row').innerHTML =
+    '<div class="stat-box"><div class="stat-label">Checkpoints</div><div class="stat-value">' + s.totalCheckpoints + '</div></div>' +
+    '<div class="stat-box"><div class="stat-label">Tasks</div><div class="stat-value">' + s.totalTasks + '</div></div>' +
+    '<div class="stat-box"><div class="stat-label">Sessions</div><div class="stat-value">' + s.totalSessions + '</div></div>' +
+    '<div class="stat-box"><div class="stat-label">Files Touched</div><div class="stat-value">' + s.uniqueFiles + '</div></div>';
 }
 
 function renderSessions(data) {
   var html = '';
   data.sessions.forEach(function(s) {
-    var isActive = currentSessionFilter === s.id;
-    var isLive = !s.ended_at;
-    var meta = '';
-    try { var m = JSON.parse(s.metadata); meta = m.cwd ? m.cwd.split('/').pop() : ''; } catch(e) {}
-    html += '<div class="session-card' + (isActive ? ' active' : '') + '" onclick="filterBySession(\\''+s.id+'\\')">';
-    html += '<div class="session-time"><span class="session-status ' + (isLive ? 'live' : 'ended') + '"></span>';
-    html += (isLive ? 'Active session' : shortTime(s.started_at) + ' - ' + shortTime(s.ended_at)) + '</div>';
-    html += '<div class="session-meta">' + s.checkpointCount + ' checkpoints &middot; ' + relativeTime(s.started_at) + '</div>';
-    html += '</div>';
+    var live = !s.ended_at;
+    html += '<div class="session-item' + (currentSessionFilter === s.id ? ' selected' : '') + '" onclick="selectSession(\\''+s.id+'\\')">';
+    html += '<div class="session-dot ' + (live ? 'live' : 'ended') + '"></div>';
+    html += '<div>';
+    html += '<div class="session-label">' + (live ? 'Active session' : shortDate(s.started_at)) + '</div>';
+    html += '<div class="session-detail">' + s.checkpointCount + ' checkpoints &middot; ' + relativeTime(s.started_at) + '</div>';
+    html += '</div></div>';
   });
   document.getElementById('sessions-list').innerHTML = html;
 }
@@ -769,54 +801,83 @@ function renderSessions(data) {
 function renderTasks(data) {
   var html = '';
   data.tasks.forEach(function(t) {
-    var isActive = currentTaskFilter === t.id;
-    html += '<div class="task-item' + (isActive ? ' active-filter' : '') + '" onclick="filterByTask(\\''+t.id+'\\')">';
-    html += '<div class="task-name"><span class="task-status-dot ' + t.status + '"></span>' + esc(t.name) + '</div>';
-    html += '<span class="task-count">' + t.checkpointCount + '</span>';
+    html += '<div class="task-item' + (currentTaskFilter === t.id ? ' selected' : '') + '" onclick="selectTask(\\''+t.id+'\\')">';
+    html += '<div class="task-label"><div class="status-indicator ' + t.status + '"></div>' + esc(t.name) + '</div>';
+    html += '<span class="counter-badge">' + t.checkpointCount + '</span>';
     html += '</div>';
   });
   document.getElementById('tasks-list').innerHTML = html;
 }
 
-function renderTimeline(data) {
-  var container = document.getElementById('main-scroll');
-  var cps = data.checkpoints;
+function renderToolBreakdown(data) {
+  var tc = data.stats.toolCounts;
+  var total = Object.values(tc).reduce(function(a,b){return a+b}, 0);
+  if (total === 0) { document.getElementById('tool-breakdown').innerHTML = ''; return; }
 
-  // Apply filters
-  if (currentFilter !== 'all') {
-    cps = cps.filter(function(cp) { return cp.tool_name === currentFilter; });
+  var colors = { Write:'#3fb950', Edit:'#d29922', Bash:'#f85149', MultiEdit:'#a371f7' };
+  var html = '<div class="tool-bar-full">';
+  for (var t in tc) {
+    html += '<div class="tool-bar-seg" style="width:'+((tc[t]/total)*100).toFixed(1)+'%;background:'+(colors[t]||'#6e7681')+'"></div>';
   }
-  if (currentSessionFilter) {
-    cps = cps.filter(function(cp) { return cp.session_id === currentSessionFilter; });
+  html += '</div><div class="tool-breakdown">';
+  for (var t in tc) {
+    var pct = ((tc[t]/total)*100).toFixed(0);
+    html += '<div class="tool-row">';
+    html += '<div class="tool-color" style="background:'+(colors[t]||'#6e7681')+'"></div>';
+    html += '<span class="tool-name">' + t + '</span>';
+    html += '<span class="tool-pct">' + pct + '%</span>';
+    html += '</div>';
   }
-  if (currentTaskFilter) {
-    cps = cps.filter(function(cp) { return cp.task_id === currentTaskFilter; });
-  }
+  html += '</div>';
+  document.getElementById('tool-breakdown').innerHTML = html;
+}
 
-  // Update header
-  var title = 'All Checkpoints';
-  var subtitle = 'Showing all activity';
-  if (currentSessionFilter) {
-    title = 'Session';
-    subtitle = cps.length + ' checkpoints';
-  }
-  if (currentTaskFilter) {
-    var t = data.tasks.find(function(t) { return t.id === currentTaskFilter; });
-    title = t ? t.name : 'Task';
-    subtitle = cps.length + ' checkpoints';
-  }
-  if (currentFilter !== 'all') {
-    subtitle += ' (filtered: ' + currentFilter + ')';
-  }
-  document.getElementById('main-title').textContent = title;
-  document.getElementById('main-subtitle').textContent = subtitle;
+function renderFilesList(data) {
+  var fileCounts = {};
+  data.checkpoints.forEach(function(cp) {
+    cp.files.forEach(function(f) {
+      var n = fileName(f.file_path);
+      fileCounts[n] = (fileCounts[n] || 0) + 1;
+    });
+  });
+
+  var sorted = Object.entries(fileCounts).sort(function(a,b){ return b[1]-a[1]; }).slice(0,10);
+  var html = '<div class="tool-breakdown">';
+  sorted.forEach(function(e) {
+    html += '<div class="tool-row" style="font-family:var(--font-mono)">';
+    html += '<span class="tool-name">' + esc(e[0]) + '</span>';
+    html += '<span class="tool-pct">' + e[1] + 'x</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+  document.getElementById('files-list').innerHTML = html;
+}
+
+function renderTabCounts(data) {
+  var tc = data.stats.toolCounts;
+  document.getElementById('count-all').textContent = data.stats.totalCheckpoints;
+  document.getElementById('count-Write').textContent = tc.Write || 0;
+  document.getElementById('count-Edit').textContent = tc.Edit || 0;
+  document.getElementById('count-Bash').textContent = tc.Bash || 0;
+}
+
+function renderTimeline() {
+  var data = currentData;
+  if (!data) return;
+
+  var cps = data.checkpoints.slice();
+
+  if (currentFilter !== 'all') cps = cps.filter(function(cp) { return cp.tool_name === currentFilter; });
+  if (currentSessionFilter) cps = cps.filter(function(cp) { return cp.session_id === currentSessionFilter; });
+  if (currentTaskFilter) cps = cps.filter(function(cp) { return cp.task_id === currentTaskFilter; });
+
+  var container = document.getElementById('timeline-col');
 
   if (cps.length === 0) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#9716;</div><div class="empty-state-text">No checkpoints to show</div></div>';
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-title">No checkpoints</div><div>Nothing to show with current filters.</div></div>';
     return;
   }
 
-  // Group by task
   var taskMap = {};
   data.tasks.forEach(function(t) { taskMap[t.id] = t; });
 
@@ -826,69 +887,75 @@ function renderTimeline(data) {
   for (var i = 0; i < cps.length; i++) {
     var cp = cps[i];
 
-    // Task group header
     if (cp.task_id !== currentTaskId) {
-      if (currentTaskId) html += '</div>'; // close prev group
+      if (currentTaskId) html += '</div></div>';
       currentTaskId = cp.task_id;
       var task = taskMap[cp.task_id];
       var tName = task ? task.name : 'unnamed';
       var tStatus = task ? task.status : 'completed';
-      var tCount = cps.filter(function(c) { return c.task_id === currentTaskId; }).length;
+      var tCount = cps.filter(function(c){return c.task_id === currentTaskId}).length;
 
-      html += '<div class="task-group">';
-      html += '<div class="task-group-header">';
-      html += '<div class="task-group-icon">T</div>';
-      html += '<div class="task-group-title">' + esc(tName) + '</div>';
-      html += '<span class="task-group-status ' + tStatus + '">' + tStatus + '</span>';
-      html += '<div class="task-group-meta">' + tCount + ' checkpoints</div>';
+      html += '<div class="commit-group">';
+      html += '<div class="commit-group-header">';
+      html += '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Z" fill="currentColor"/></svg>';
+      html += esc(tName);
+      html += '<span class="commit-group-status ' + tStatus + '">' + tStatus + '</span>';
+      html += '<span class="commit-group-count">' + tCount + ' checkpoint' + (tCount!==1?'s':'') + '</span>';
       html += '</div>';
+      html += '<div class="commit-list">';
     }
 
     var tool = cp.tool_name || 'Write';
-    var isLast = i === cps.length - 1 || cps[i+1].task_id !== cp.task_id;
+    var label = toolLabel(tool, cp.files);
 
-    html += '<div class="cp-row">';
-    html += '<div class="cp-line"><div class="cp-dot ' + tool + '"></div>';
-    if (!isLast) html += '<div class="cp-connector"></div>';
-    html += '</div>';
-
-    html += '<div class="cp-card" onclick="toggleDiff(\\''+cp.id+'\\')">';
-    html += '<div class="cp-card-header">';
-    html += '<span class="cp-tool-badge ' + tool + '">' + tool + '</span>';
-    html += '<span class="cp-id-badge">' + cp.id.slice(0,8) + '</span>';
-    html += '<span class="cp-time-badge">' + relativeTime(cp.created_at) + '</span>';
-    html += '</div>';
+    html += '<div class="commit-row" onclick="toggleDiff(\\''+cp.id+'\\')">';
+    html += '<div class="commit-icon ' + tool + '">' + tool[0] + '</div>';
+    html += '<div class="commit-body">';
+    html += '<div class="commit-title-row"><div class="commit-msg">' + esc(label) + '</div></div>';
 
     if (cp.files && cp.files.length > 0) {
-      html += '<div class="cp-files-row">';
+      html += '<div class="commit-files">';
       cp.files.forEach(function(f) {
-        html += '<span class="cp-file-tag">' + esc(fileName(f.file_path)) + '</span>';
+        html += '<span class="file-badge">' + esc(fileName(f.file_path)) + '</span>';
       });
       html += '</div>';
     }
 
     if (cp.reasoning) {
-      html += '<div class="cp-reasoning-box">';
-      html += '<div class="cp-reasoning-label">User prompt</div>';
+      html += '<div class="commit-reasoning">';
+      html += '<div class="reasoning-label">User prompt</div>';
       html += esc(cp.reasoning);
       html += '</div>';
     }
 
-    html += '<div class="diff-panel" id="diff-' + cp.id + '">' + formatDiff(cp.files) + '</div>';
-    html += '</div></div>';
+    html += '<div class="diff-panel" id="diff-' + cp.id + '">' + formatDiffHTML(cp.files) + '</div>';
+    html += '</div>';
+
+    html += '<div class="commit-right">';
+    html += '<span class="commit-sha">' + cp.id.slice(0,7) + '</span>';
+    html += '<span class="commit-time">' + relativeTime(cp.created_at) + '</span>';
+    html += '</div>';
+    html += '</div>';
   }
 
-  if (currentTaskId) html += '</div>'; // close last group
+  if (currentTaskId) html += '</div></div>';
   container.innerHTML = html;
 }
 
 function render() {
   if (!currentData) return;
-  renderProjectInfo(currentData);
-  renderSidebarStats(currentData);
+  document.getElementById('nav-project').textContent = currentData.project.name;
+
+  var hasActive = currentData.sessions.some(function(s){ return !s.ended_at; });
+  document.getElementById('nav-live').style.display = hasActive ? 'flex' : 'none';
+
+  renderStats(currentData);
+  renderTabCounts(currentData);
   renderSessions(currentData);
   renderTasks(currentData);
-  renderTimeline(currentData);
+  renderToolBreakdown(currentData);
+  renderFilesList(currentData);
+  renderTimeline();
 }
 
 async function loadData() {

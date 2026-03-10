@@ -9,6 +9,8 @@ import { statusCommand } from './cli/commands/status';
 import { taskCommand } from './cli/commands/task';
 import { exportCommand } from './cli/commands/export';
 import { uiCommand } from './cli/commands/ui';
+import { checkpointCommand } from './cli/commands/checkpoint';
+import { watchCommand } from './cli/commands/watch';
 
 const program = new Command();
 
@@ -62,6 +64,20 @@ program
   .description('Open the timeline web UI')
   .option('-p, --port <number>', 'port number', '3333')
   .action((options) => uiCommand({ port: options.port }));
+
+program
+  .command('checkpoint')
+  .alias('cp')
+  .description('Manually checkpoint files (for use with any agent)')
+  .argument('<files...>', 'files to checkpoint')
+  .option('-m, --message <msg>', 'checkpoint message')
+  .action((files, options) => checkpointCommand(files, options));
+
+program
+  .command('watch')
+  .description('Watch for file changes (works with Cursor, Aider, any agent)')
+  .option('--ignore <dirs>', 'comma-separated directories to ignore')
+  .action((options) => watchCommand(options));
 
 program
   .command('setup')
