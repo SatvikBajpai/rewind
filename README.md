@@ -76,9 +76,45 @@ Every checkpoint stores:
 
 ## Storage
 
-All data is stored locally in `.rewind/`:
-- `rewind.db` — SQLite database (metadata, checkpoint records)
-- `diffs/` — Gzipped file snapshots and patch files
+All data is stored locally in `.rewind/` at your project root:
+
+```
+.rewind/
+├── rewind.db                        # SQLite database (all metadata)
+├── reasoning_buffer.txt             # Temp: holds last user prompt until next checkpoint
+└── diffs/
+    └── <checkpoint-id>/
+        ├── <hash>.snapshot.gz       # Gzipped full file copy (before state)
+        └── <hash>.patch             # Unified diff (what changed)
+```
+
+### Database Schema
+
+SQLite with WAL mode for concurrent hook writes:
+
+- **sessions** — One per Claude Code conversation (start/end time, cwd, metadata)
+- **tasks** — Logical groups within a session ("add auth", "fix login bug")
+- **checkpoints** — One per tool call (tool name, input, reasoning, sequence number)
+- **checkpoint_files** — Files affected by each checkpoint (path, hash, size, pointers to snapshot/diff files)
+
+### How Snapshots Work
+
+- **Pre-snapshots** (`.snapshot.gz`) — Full gzipped copy of the file *before* the change. This is what gets restored on `rewind undo`. Gzip keeps storage small (~20-30% of original).
+- **Patches** (`.patch`) — Unified diff computed after the change. This is what `rewind diff` displays.
+- **Reasoning buffer** — Your last prompt is captured via the `UserPromptSubmit` hook and attached to the next checkpoint, linking *why* you asked for the change to *what* changed.
+
+### Browsing Data
+
+```bash
+# Query the database directly
+sqlite3 .rewind/rewind.db "SELECT id, tool_name, reasoning FROM checkpoints ORDER BY sequence DESC LIMIT 5;"
+
+# See stored snapshots
+ls .rewind/diffs/
+
+# Decompress a snapshot
+gunzip -c .rewind/diffs/<checkpoint-id>/<hash>.snapshot.gz
+```
 
 Add `.rewind/` to your `.gitignore`.
 
