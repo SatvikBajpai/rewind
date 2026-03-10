@@ -142,23 +142,51 @@ export function recordPostState(rewindDir: string, checkpointId: string): void {
 
 /**
  * Rollback a single checkpoint — restore files to their pre-checkpoint state.
+ * Creates a "redo" checkpoint first so the undo can be reversed.
  */
 export function rollbackCheckpoint(rewindDir: string, checkpointId: string): string[] {
   const db = getDb(rewindDir);
+  const checkpoint = db.prepare('SELECT * FROM checkpoints WHERE id = ?').get(checkpointId) as Checkpoint | undefined;
+  if (!checkpoint) return [];
+
   const files = db.prepare(
     'SELECT * FROM checkpoint_files WHERE checkpoint_id = ?'
   ).all(checkpointId) as CheckpointFile[];
 
+  if (files.length === 0) {
+    // Empty checkpoint — just delete it
+    db.prepare('DELETE FROM checkpoints WHERE id = ?').run(checkpointId);
+    return [];
+  }
+
+  // Save current state as a redo checkpoint BEFORE restoring
+  const filePaths = files.map(f => f.file_path).filter(f => {
+    try { fs.accessSync(f); return true; } catch { return false; }
+  });
+
+  if (filePaths.length > 0) {
+    createCheckpoint(
+      rewindDir,
+      'redo',
+      JSON.stringify({ undone_checkpoint: checkpointId }),
+      filePaths,
+      `Redo point for undoing ${checkpointId.slice(0, 8)}`
+    );
+  }
+
+  // Now restore files
   const restoredFiles: string[] = [];
 
   for (const file of files) {
     if (file.snapshot_path) {
-      // Restore from snapshot
-      const content = loadSnapshot(file.snapshot_path);
-      fs.writeFileSync(file.file_path, content);
-      restoredFiles.push(file.file_path);
+      try {
+        const content = loadSnapshot(file.snapshot_path);
+        fs.writeFileSync(file.file_path, content);
+        restoredFiles.push(file.file_path);
+      } catch {
+        // snapshot missing or write failed
+      }
     } else if (!file.file_existed) {
-      // File didn't exist before — delete it
       try {
         fs.unlinkSync(file.file_path);
         restoredFiles.push(file.file_path);
@@ -168,7 +196,7 @@ export function rollbackCheckpoint(rewindDir: string, checkpointId: string): str
     }
   }
 
-  // Clean up checkpoint data
+  // Mark checkpoint as undone (soft delete) instead of hard delete
   db.prepare('DELETE FROM checkpoint_files WHERE checkpoint_id = ?').run(checkpointId);
   db.prepare('DELETE FROM checkpoints WHERE id = ?').run(checkpointId);
   removeCheckpointDiffs(rewindDir, checkpointId);

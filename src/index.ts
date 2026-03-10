@@ -40,8 +40,9 @@ program
 
 program
   .command('undo [scope]')
-  .description('Rollback changes. Scope: (none)=last checkpoint, task, session')
-  .action((scope) => undoCommand(scope));
+  .description('Rollback changes. Scope: (none)=last, task, session, redo, or <checkpoint-id>')
+  .option('-f, --force', 'skip confirmation for destructive operations')
+  .action((scope, options) => undoCommand(scope, { force: options.force }));
 
 program
   .command('status')

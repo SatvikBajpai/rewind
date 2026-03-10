@@ -12,6 +12,7 @@ import { recordPostState } from '../core/checkpoint';
 import { saveSnapshot } from '../storage/diff-store';
 import { hashContent } from '../utils/hash';
 import { computeDiff, createNewFileDiff } from '../core/diff-engine';
+import { debugLog, debugError } from '../utils/log';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
@@ -180,6 +181,7 @@ async function main() {
 
     process.stdout.write('{}');
   } catch (err) {
+    debugError('post-tool-use', err);
     process.stdout.write('{}');
   }
 }

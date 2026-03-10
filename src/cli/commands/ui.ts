@@ -981,7 +981,7 @@ export function uiCommand(options: UIOptions): void {
     if (req.url === '/api/data') {
       res.writeHead(200, {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': 'http://localhost',
       });
       try {
         const data = getApiData(rewindDir);

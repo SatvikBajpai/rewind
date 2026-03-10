@@ -9,6 +9,7 @@
 import { findRewindDir, getProjectRoot } from '../utils/config';
 import { initializeDb } from '../storage/database';
 import { createCheckpoint } from '../core/checkpoint';
+import { debugLog, debugError } from '../utils/log';
 import fs from 'fs';
 import path from 'path';
 
@@ -189,6 +190,7 @@ async function main() {
 
     process.stdout.write('{}');
   } catch (err) {
+    debugError('pre-tool-use', err);
     process.stdout.write('{}');
   }
 }
